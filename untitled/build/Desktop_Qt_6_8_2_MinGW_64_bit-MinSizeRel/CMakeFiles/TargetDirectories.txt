@@ -1,0 +1,7 @@
+D:/ElectricalEngineering/#0 Graduation project/The Project/untitled/build/Desktop_Qt_6_8_2_MinGW_64_bit-MinSizeRel/CMakeFiles/untitled.dir
+D:/ElectricalEngineering/#0 Graduation project/The Project/untitled/build/Desktop_Qt_6_8_2_MinGW_64_bit-MinSizeRel/CMakeFiles/edit_cache.dir
+D:/ElectricalEngineering/#0 Graduation project/The Project/untitled/build/Desktop_Qt_6_8_2_MinGW_64_bit-MinSizeRel/CMakeFiles/rebuild_cache.dir
+D:/ElectricalEngineering/#0 Graduation project/The Project/untitled/build/Desktop_Qt_6_8_2_MinGW_64_bit-MinSizeRel/CMakeFiles/list_install_components.dir
+D:/ElectricalEngineering/#0 Graduation project/The Project/untitled/build/Desktop_Qt_6_8_2_MinGW_64_bit-MinSizeRel/CMakeFiles/install.dir
+D:/ElectricalEngineering/#0 Graduation project/The Project/untitled/build/Desktop_Qt_6_8_2_MinGW_64_bit-MinSizeRel/CMakeFiles/install/local.dir
+D:/ElectricalEngineering/#0 Graduation project/The Project/untitled/build/Desktop_Qt_6_8_2_MinGW_64_bit-MinSizeRel/CMakeFiles/install/strip.dir
