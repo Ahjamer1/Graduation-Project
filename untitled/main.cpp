@@ -10,6 +10,7 @@
 #include <queue>
 #include <filesystem>
 #include <utility>
+#include "HelperFunctions.h"
 using namespace std;
 // parameters
 const int numberOfSU = 20;
@@ -21,7 +22,7 @@ const double durationOfTimeSlot = 0.01;
 const int numberOfBandsPerSU = 1;
 vector <double> PuActiveProb={0.2,0.4,0.5,0.6};
 double probOffToOn = 0.01;//never change this
-const static unsigned int seed = 123;
+unsigned int seed = 123;
 std::mt19937_64 randEngine(seed);
 vector <double>  FalseAlarmAvgTimeSlot(numberOfTimeSlots,0);
 vector <double>  MissDetectionAvgTimeSlot(numberOfTimeSlots,0);
@@ -30,6 +31,10 @@ vector <double> MissDetectionAvgBand(numberOfBands,0);
 vector <double> FalseAlarmAvgBandSecond(numberOfBands,0);
 vector <double> MissDetectionAvgBandSecond(numberOfBands,0);
 int historySizeForTransmissionVector = 10;
+int historySize = 5;
+int dataRateControlHistorySize = 10;
+
+
 
 class Parameters {
 public:
@@ -39,58 +44,9 @@ public:
     Parameters() : AvgPerTimeSlot(numberOfTimeSlots,0),AvgPacketWaitingTime(numberOfSU,0),AvgPerBand(numberOfBands,0){}
 };
 
-// Bernoulli Chance
-bool randomCoinFlipper(double probability){
-
-    const double p = probability;
-    bernoulli_distribution flip {p}; //probability% chance to succeed
-    return flip(randEngine); //if(flip(randEngine) === true return true else return false);
-}
-
-
-// Function to generate two random numbers:
-// one between 0.1–0.3 and another between 0.6–0.8
-pair<double, double> chooseProbabilityToGeneratePKT() {
-    std::mt19937_64 randEngine(seed);
-
-    // Define the discrete possible values
-    vector<double> range1 = {0.1, 0.2, 0.3};
-    vector<double> range2 = {0.6, 0.7, 0.8};
-
-    // vector<double> range1 = {0, 0, 0};
-    // vector<double> range2 = {0, 0, 0};
-
-    uniform_int_distribution<> dist1(0, range1.size() - 1);
-    uniform_int_distribution<> dist2(0, range2.size() - 1);
-
-    double num1 = range1[dist1(randEngine)];
-    double num2 = range2[dist2(randEngine)];
-
-    return {num1, num2};
-}
-
-
-
-vector<unsigned int> selectRandomValues(vector<unsigned int>& values, int numSelections) {
-    if (values.size() < numSelections) {
-        throw invalid_argument("Not enough elements in the input vector.");
-    }
-
-    vector<unsigned int> selected(numSelections);
-    sample(values.begin(), values.end(), selected.begin(), numSelections, randEngine);
-    if (values.size() == numSelections)
-    {  // When selecting all elements, just shuffle
-        selected = values;
-        shuffle(selected.begin(), selected.end(), randEngine);
-    }
-    return selected;
-}
-
 class Band {
 public:
     bool PUState = 0;
-    // pair<int,int> PUcoordinates;
-    // int freqMHz;
     //this vector shows whether this band was used to transmit pkts or not
     deque <unsigned int> historyOfTransmissionState;
 
@@ -100,21 +56,17 @@ public:
 
 class Packet{
 public:
-    // int sizeOfPkt = 65;
     int pktGenerationTime;
-
-    // pktWaitingTimeInQueue = arrivalTime - generationTime
-    int pktWaitingTimeInQueue;
+    int pktWaitingTimeInQueue; // pktWaitingTimeInQueue = arrivalTime - generationTime
     int numberOfTriesToSend = 0;
     int pktArrivalTime;
     // int AckSequence; // we will assume that the SU receives an acknowledgment singal saying that the message is delivered
     // we will model this in the simulator by checking if the SU is alone on the band or not
 };
 
-int historySize = 5;
-int dataRateControlHistorySize = 10;
 class SecondaryUser{
 public:
+    deque<vector<unsigned int>> SensedBandsSUPerspective;
     vector<unsigned int> potentialBands;
     //Function(PUState) => fill potentialBands
 
@@ -127,17 +79,13 @@ public:
         // Urgency possible values:
         // 0: low data rate
         // 1: High data rate
-    double pktGenerationRate;
+
+
     vector <unsigned int> periodsForBulky = {1,4,9};
     // periodsForBulky generates a packet every 2, 5, 10 (1,4,9 are set for counting purposes)
     vector <unsigned int> TxRates = {0,1,4,9,19}; // one: means every time slot(fastest) / 20: means every 20 time slot (SLowest)
     // TxRates transmits a packet every 1, 2, 5, 10, 20 (0,1,4,9,19 are set for counting purposes)
 
-    int counterPeriod=1; // is the value chosenPeriod from periodsForBulky;
-    int chosenPeriod =0; // index of the counter (which is the value chosenPeriod from the periodsForBulky)
-
-    int counterTxRate= 0; // is the value chosenPeriod from periodsForBulky;
-    int chosenTxRate = 0; // index of the counter (which is the value chosenPeriod from the periodsForBulky)
 
 
     int selectedBand=-1;
@@ -148,29 +96,27 @@ public:
     // 3. 21 => summation  = 3
     queue <Packet> pktqueue;  // instantiate an empty queue of integers
 
+    double pktGenerationRate;
     void fillpktGenerationRate(){
-        if(this->urgency ==0 && this->dataRateClass == 0){              // alarm
+        if(this->urgency ==0 && this->dataRateClass == 0){ // alarm
             pktGenerationRate = chooseProbabilityToGeneratePKT().first;                          //geometric with low probability
-        }else if(this->urgency ==1 && this->dataRateClass == 1){        // camera
-            pktGenerationRate = -1;                                    // periodic (to be chosenPeriod in each timeslot according to feedback)
-        } else if(this->urgency ==2 && this->dataRateClass == 1){      // best effort (internet traffic)
-            pktGenerationRate = chooseProbabilityToGeneratePKT().second;                                  //geometric with higher probability
+        }else if(this->urgency ==1 && this->dataRateClass == 1){ // camera
+            pktGenerationRate = -1;                                                   // periodic (to be chosenPeriod in each timeslot according to feedback)
+        } else if(this->urgency ==2 && this->dataRateClass == 1){                     // best effort (internet traffic)
+            pktGenerationRate = chooseProbabilityToGeneratePKT().second;             //geometric with higher probability
         }
     }
-    //ALL SU's generate pkts at random time stamps:
-    // SU's with high DataRate, generate pkts at random timeslots according to a geometric RandomVariable, but once the function (generatePKT) is called, according to the application (say camera)
-    // certain calculated Stream Of bits is generated every time slot for k time slots (until the full data is transmitted)
-    // Example: Device generates 6Mbps => every timeslot: 6Mbps === 60Kb/10ms === 60Kb/timeslot => 7500 byte/timeslot
-    //          Device generates every time slot 7500 byte
-    //          Device starts searching for idle spectrum
-    //          If found: Device transmits 7500 * k bytes accumulated during acquiring the channel and backoff
-    //          If not found: Device groups every 65KB together into one packet inside the queue to be transmitted once an empty band is present
-    //
     void generatePkt(unsigned int t){
         Packet pkt;
         pkt.pktGenerationTime = t;
         this->pktqueue.push(pkt);
     }
+
+    //**********************************************************
+    //************* Handling GenerationRate Change *************
+    //**********************************************************
+    int counterPeriod=1; // is the value chosenPeriod from periodsForBulky;
+    int chosenPeriod =0; // index of the counter (which is the value chosenPeriod from the periodsForBulky)
     int choosePktPeriod(vector<unsigned int> periods, string actionToTake){    //actionToTake : "increaseQuality" || "decreaseQulaity"
         if(actionToTake == "increaseQuality"){
             if(this->chosenPeriod >0){
@@ -183,6 +129,16 @@ public:
         }
         return this-> periodsForBulky[chosenPeriod]; // to be changed later to choose dynamically according to feedback
     }
+    //**********************************************************
+    //**********************************************************
+
+
+    //**********************************************************
+    //***************** Handling TXRate Change *****************
+    //**********************************************************
+    int counterTxRate= 0; // is the value chosenPeriod from periodsForBulky;
+    int chosenTxRate = 0; // index of the counter (which is the value chosenPeriod from the periodsForBulky)
+
 
     int chooseTxRate(vector<unsigned int> TxRates, string actionToTake){    //actionToTake : "increaseTxRate" || "decreaseTxRate"
         if(actionToTake == "increaseTxRate"){
@@ -196,22 +152,19 @@ public:
         }
         return this-> TxRates[chosenTxRate]; // to be changed later to choose dynamically according to feedback
     }
+    //**********************************************************
+    //**********************************************************
+
 
 
     vector<vector <unsigned int>> history;
-    // vector<unsigned int> dataRateControlHistory;
     deque <unsigned int> dataRateControlHistory;
     int lastTXState= 0;
-    //so the possible SU classes:
 
-    // Urgent low data rate (fire Alarm)
-    // Not Urgent uninterruptable high data rate (can lower the resolution)
-    // Not Urgent interruptable high data rate (internet traffic)
-
-
-    // SUSensingBands
+    //**********************************************************
+    //******************* SUSensingBands ***********************
+    //**********************************************************
     vector <unsigned int> bandsAsSeenBySU;
-
     void fillbandsAsSeenBySU(vector<unsigned int> TXFREQARRAY, int t){
         for (int i=0; i< TXFREQARRAY.size(); i++){
             if(i != this->selectedBand){
@@ -236,23 +189,65 @@ public:
                 }
             }
         }
+        this->SensedBandsSUPerspective.push_back(bandsAsSeenBySU);
+        this->SensedBandsSUPerspective.pop_front();
+        // for(int i=0; i< this->SensedBandsSUPerspective.size(); i++){
+        //     printVector(SensedBandsSUPerspective[i],"SensedBandsSUPerspective: ");
+        // }
     }
+    //**********************************************************
+    //**********************************************************
 
-
-
-
-    // generatePkt depending on geometric randomVariable randomly during time slots
 
     SecondaryUser()
         : history(numberOfBands, std::vector<unsigned int>(historySize, 0)),
         dataRateControlHistory(dataRateControlHistorySize, 0),
-        bandsAsSeenBySU(numberOfBands, 0)
+        bandsAsSeenBySU(numberOfBands, 0),
+        SensedBandsSUPerspective(5, std::vector<unsigned int>(numberOfBands, 0))
     {
         // constructor body (optional)
     }
 };
 
+//**********************************************************
+//***************** Helper Functions ***********************
+//**********************************************************
+void printQueue(vector<Packet> q) {
+    for(int i=0; i< q.size(); i++){
+        Packet p = q[i];
+        cout<< "GenTime: " <<p.pktGenerationTime << endl;
+        cout<< "WaitingTime: "<< p.pktWaitingTimeInQueue<< endl;
+        cout<< "Arrival: "<< p.pktArrivalTime << endl;
+    }
+}
+void PUInitMarkov (vector<Band>& PU)
+{
+    for(int i=0; i< PU.size(); i++){
 
+
+        if(PU[i].PUState == false)
+        {
+            //flip a coin to choose between P01 and P00
+            PU[i].PUState = randomCoinFlipper(0.01);
+        }
+        else if(PU[i].PUState == true)
+        {
+            //flip a coin to choose between P10 and P11
+            PU[i].PUState = !(randomCoinFlipper(0.01));
+        }
+    }
+}
+//**********************************************************
+//**********************************************************
+
+
+
+
+
+
+//**********************************************************
+//***************** Performance Parameters *****************
+//**********************************************************
 void CollisionCounter (int time,vector <double> &AvgPerTimeSlot,vector <unsigned int> &TXFreqArray)
 {
     int counter=0;
@@ -325,39 +320,13 @@ void UtilizationCalculator (int time,vector <unsigned int> &TXFreqArray,vector <
     AvgPerTimeSlot[time]=counter/numberOfBands;
 }
 
+//**********************************************************
+//**********************************************************
+
 vector <Band> PU(numberOfBands);
 vector <SecondaryUser> SU(numberOfSU);
-void PUInitMarkov (vector<Band>& PU)
-{
-    for(int i=0; i< PU.size(); i++){
-
-
-        if(PU[i].PUState == false)
-        {
-            //flip a coin to choose between P01 and P00
-            PU[i].PUState = randomCoinFlipper(0.01);
-        }
-        else if(PU[i].PUState == true)
-        {
-            //flip a coin to choose between P10 and P11
-            PU[i].PUState = !(randomCoinFlipper(0.01));
-        }
-    }
-}
-
-
-
-
-
 
 void initializeSystem() {
-    // coordinatesAndDistancesCalc(PU, SU);              // <- sets initial coordinates
-    // updateDistancesOnly(PU, SU);              // <- calculates distances once
-    // for (int i = 0; i < PU.size(); i++) {
-    //     PU[i].freqMHz = 600 + 6 * i;
-    // }
-
-
     //initialize SU properties
     //Assume 10% of SU's are urgent
     //Assume 50% of SU's are bulky uninterruptable
@@ -379,41 +348,15 @@ void initializeSystem() {
         SU[i].dataRateClass = 1;
         SU[i].fillpktGenerationRate();
     }
-
-
 }
 
-void printQueue(vector<Packet> q) {
-    for(int i=0; i< q.size(); i++){
-        Packet p = q[i];
-        cout<< "GenTime: " <<p.pktGenerationTime << endl;
-        cout<< "WaitingTime: "<< p.pktWaitingTimeInQueue<< endl;
-        cout<< "Arrival: "<< p.pktArrivalTime << endl;
-    }
-}
 
-void printDeQueue(deque<unsigned int> q){
-    while(!q.empty()){
-        cout<< q.front()<< " ";
-        q.pop_front();
-    }
-    cout<< endl;
-}
 
-void printVector(vector<unsigned int>vec, string msg){
-    cout<<msg<< endl;
-    for(int i=0; i<vec.size(); i++){
-        cout<<vec[i]<< ", ";
-    }
-    cout<< endl;
-}
-void printVector(vector<double>vec, string msg){
-    cout<<msg<< endl;
-    for(int i=0; i<vec.size(); i++){
-        cout<<vec[i]<< ", ";
-    }
-    cout<< endl;
-}
+
+//**********************************************************
+//*************** Allocation Function **********************
+//**********************************************************
+
 vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser>&SU, int t){
     vector <unsigned int> possibleBands;
     vector <unsigned int> occupiedBands(PU.size(), 0);
@@ -514,6 +457,10 @@ vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser
     return TXFreqArray;
 }
 
+//**********************************************************
+//**********************************************************
+
+
 void fillHistoryOfTransmissionState(vector <Band> &PU, vector<unsigned int> &freqArr){
     for(int i=0; i< freqArr.size(); i++){
         if(freqArr[i] >0){
@@ -526,10 +473,9 @@ void fillHistoryOfTransmissionState(vector <Band> &PU, vector<unsigned int> &fre
     }
 }
 
+
+
 int main(){
-
-
-
     Parameters Collisions;
     Parameters TotalPackets;
     Parameters WaitingTime;
@@ -539,8 +485,6 @@ int main(){
     initializeSystem();
     // vector<vector<unsigned int>> pktgenerationrate(numberOfTimeSlots, vector<unsigned int>(SU.size(), 0));
     for(int t=0; t< numberOfTimeSlots; t++){ //TIMESLOTS LOOP
-
-
         cout<< "time slot: "<< t<< endl;
         // cout<< "TxRate for SU 2 is:"<<SU[2].counterTxRate<<endl;
         // PUInitMarkov(PU);
