@@ -208,11 +208,45 @@ public:
     // Not Urgent uninterruptable high data rate (can lower the resolution)
     // Not Urgent interruptable high data rate (internet traffic)
 
+
+    // SUSensingBands
+    vector <unsigned int> bandsAsSeenBySU;
+
+    void fillbandsAsSeenBySU(vector<unsigned int> TXFREQARRAY, int t){
+        for (int i=0; i< TXFREQARRAY.size(); i++){
+            if(i != this->selectedBand){
+                if(TXFREQARRAY[i] >0){
+                    this->bandsAsSeenBySU[i] = 1;
+                }else{
+                    this->bandsAsSeenBySU[i] = 0;
+                }
+            }else{ // it is the selectedBand by the SU
+                if(this->counterTxRate >0){ // SU is not transmitting its packets yet
+                    if(TXFREQARRAY[i] >0){
+                        this->bandsAsSeenBySU[i] = 1;
+                    }else{
+                        this->bandsAsSeenBySU[i] = 0;
+                    }
+                }else if(this->counterTxRate ==0){ // SU is transmitting its packets
+                    if(TXFREQARRAY[i] >1){
+                        this->bandsAsSeenBySU[i] = 1;
+                    }else{
+                        this->bandsAsSeenBySU[i] = 0;
+                    }
+                }
+            }
+        }
+    }
+
+
+
+
     // generatePkt depending on geometric randomVariable randomly during time slots
 
     SecondaryUser()
         : history(numberOfBands, std::vector<unsigned int>(historySize, 0)),
-        dataRateControlHistory(dataRateControlHistorySize, 0)
+        dataRateControlHistory(dataRateControlHistorySize, 0),
+        bandsAsSeenBySU(numberOfBands, 0)
     {
         // constructor body (optional)
     }
@@ -400,7 +434,9 @@ vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser
                 // SU[i].selectedBand will not be random, it must be based upon the history parameters
                 // SU[i] will not get assigned a band every time slot, however, it will choose to stay or relinquish
                 if(SU[i].selectedBand==-1){ // this if statement is satisfied, when SU wasn't assigned a band yet, or when SU relinquished a band it chose before
-                    SU[i].selectedBand =selectRandomValues(possibleBands,1)[0];
+                    SU[i].selectedBand =selectRandomValues(possibleBands,1)[0]; // to be changed with history
+                    cout<< "SU["<< i<< "]: selectedBand:"<< SU[i].selectedBand<< endl;
+
                     occupiedBands[SU[i].selectedBand]+=1;
                 }else{
                     //choose to stay or relinquish
@@ -437,6 +473,9 @@ vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser
     }
 
     for(int i=0; i< SU.size(); i++){
+        SU[i].fillbandsAsSeenBySU(TXFreqArray, t);
+        string s = "BandsAsSeenBySU[" + to_string(i) + "]: ";
+        printVector(SU[i].bandsAsSeenBySU,s);
         if(SU[i].selectedBand !=-1){ //was given band
             if(TXFreqArray[SU[i].selectedBand] != 1){ //NOT >1, because if SU selectedBand, then TXFreqArray[SU[i].selectedBand] >0 for sure.
                 // mark collision of SU on that band
@@ -465,8 +504,10 @@ vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser
             SU[i].dataRateControlHistory.pop_front();
 
         }
+        if(i ==3){
+            cout<< "SU[3].queueSIZE: "<< SU[i].pktqueue.size()<< endl;
+        }
     }
-
 
 
     printVector(TXFreqArray,"TX frequency array");
@@ -569,7 +610,7 @@ int main(){
 
 
         // for(int i=0; i< SU.size(); i++){
-        vector <unsigned int> FreqArray=allocationFunction(PU, SU,t);
+        vector <unsigned int> TXFreqArray=allocationFunction(PU, SU,t);
         // }
         // cout<<"selected band for su2: "<<SU[2].selectedBand<<endl;
         // printVector(SU[2].dataRateControlHistory, "SU2 ControlHistory: ");
@@ -588,9 +629,9 @@ int main(){
 
 
         TotalPacketsCounter(t,SU,TotalPackets.AvgPerTimeSlot);
-        CollisionCounter(t,Collisions.AvgPerTimeSlot,FreqArray);
-        ThroughPutCalculator(t,FreqArray,Throughput.AvgPerTimeSlot,Throughput.AvgPerBand);
-        UtilizationCalculator(t,FreqArray,Utilization.AvgPerTimeSlot,Utilization.AvgPerBand);
+        CollisionCounter(t,Collisions.AvgPerTimeSlot,TXFreqArray);
+        ThroughPutCalculator(t,TXFreqArray,Throughput.AvgPerTimeSlot,Throughput.AvgPerBand);
+        UtilizationCalculator(t,TXFreqArray,Utilization.AvgPerTimeSlot,Utilization.AvgPerBand);
 
 
     }
@@ -622,8 +663,10 @@ int main(){
     // printVector(Collisions.AvgPerTimeSlot,"Collision Count per timeslot Averaged Per Band");
     // printVector(TotalPackets.AvgPerTimeSlot,"Total Packets in whole queue");
     // printVector(WaitingTime.AvgPacketWaitingTime,"Average Packet Waiting time for each SU ");
-    printVector(Utilization.AvgPerTimeSlot,"TimeSlot Average");
-    printVector(Utilization.AvgPerBand,"Band Average");
+    // printVector(Utilization.AvgPerTimeSlot,"TimeSlot Average");
+    // printVector(Utilization.AvgPerBand,"Band Average");
+    printVector(Throughput.AvgPerTimeSlot,"TimeSlot Average");
+    printVector(Throughput.AvgPerBand,"Band Average");
         // *********************************Writing Into Files*******************************************//
 
 
