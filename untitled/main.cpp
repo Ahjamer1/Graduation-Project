@@ -13,10 +13,10 @@
 using namespace std;
 // parameters
 const int numberOfSU = 20;
-const double numberOfBands = 30;
+const double numberOfBands = 10;
 // vector <double> numofBands ={5,10,25};
 const int numberOfPU = numberOfBands;
-const double numberOfTimeSlots = 10000;
+const double numberOfTimeSlots = 10;
 const double durationOfTimeSlot = 0.01;
 const int numberOfBandsPerSU = 1;
 vector <double> PuActiveProb={0.2,0.4,0.5,0.6};
@@ -35,7 +35,8 @@ class Parameters {
 public:
     vector <double> AvgPerTimeSlot;
     vector <double> AvgPacketWaitingTime;
-    Parameters() : AvgPerTimeSlot(numberOfTimeSlots,0),AvgPacketWaitingTime(numberOfSU,0){}
+    vector <double> AvgPerBand;
+    Parameters() : AvgPerTimeSlot(numberOfTimeSlots,0),AvgPacketWaitingTime(numberOfSU,0),AvgPerBand(numberOfBands,0){}
 };
 
 // Bernoulli Chance
@@ -261,7 +262,34 @@ void WaitingTimeCalculator (vector <SecondaryUser> SU,vector <double> &AvgPacket
 
     }
 }
+void ThroughPutCalculator (int time,vector <unsigned int> &TXFreqArray,vector <double> &AvgPerTimeSlot,vector <double> &AvgPerBand)
+{
+    int counter=0;
+    for (int i=0;i<TXFreqArray.size();i++)
+    {
+        if (TXFreqArray[i]==1)
+        {
+            AvgPerBand[i]=AvgPerBand[i]+1/numberOfTimeSlots;
+            counter++;
 
+        }
+    }
+    AvgPerTimeSlot[time]=counter/numberOfBands;
+}
+void UtilizationCalculator (int time,vector <unsigned int> &TXFreqArray,vector <double> &AvgPerTimeSlot,vector <double> &AvgPerBand)
+{
+    int counter=0;
+    for (int i=0;i<TXFreqArray.size();i++)
+    {
+        if (TXFreqArray[i]>=1)
+        {
+            AvgPerBand[i]=AvgPerBand[i]+1/numberOfTimeSlots;
+            counter++;
+
+        }
+    }
+    AvgPerTimeSlot[time]=counter/numberOfBands;
+}
 
 vector <Band> PU(numberOfBands);
 vector <SecondaryUser> SU(numberOfSU);
@@ -464,6 +492,8 @@ int main(){
     Parameters Collisions;
     Parameters TotalPackets;
     Parameters WaitingTime;
+    Parameters Utilization;
+    Parameters Throughput;
     //initialize system
     initializeSystem();
     // vector<vector<unsigned int>> pktgenerationrate(numberOfTimeSlots, vector<unsigned int>(SU.size(), 0));
@@ -471,7 +501,7 @@ int main(){
 
 
         cout<< "time slot: "<< t<< endl;
-        cout<< "TxRate for SU 2 is:"<<SU[2].counterTxRate<<endl;
+        // cout<< "TxRate for SU 2 is:"<<SU[2].counterTxRate<<endl;
         // PUInitMarkov(PU);
         for (int i=0;i<PU.size();i++){
             PU[i].PUState=0;
@@ -541,24 +571,26 @@ int main(){
         // for(int i=0; i< SU.size(); i++){
         vector <unsigned int> FreqArray=allocationFunction(PU, SU,t);
         // }
-        cout<<"selected band for su2: "<<SU[2].selectedBand<<endl;
+        // cout<<"selected band for su2: "<<SU[2].selectedBand<<endl;
         // printVector(SU[2].dataRateControlHistory, "SU2 ControlHistory: ");
-        printDeQueue(SU[2].dataRateControlHistory);
+        // printDeQueue(SU[2].dataRateControlHistory);
 
         // SU[i].counter= SU[i].choosePktPeriod(SU[i].periodsForBulky, "decreaseQuality");
         // cout<< "decreaseQualitier"<< endl;
-        cout<< "SIZE: "<< SU[2].pktqueue.size()<< endl;
-        if (t%10==0)
-        {
-            for (int i=0;i<SU.size();i++)
-            {
-                cout<<"SU"<<i<<"TxRate: "<<SU[i].counterTxRate<<" ";
-            }
-        }
+        // cout<< "SIZE: "<< SU[2].pktqueue.size()<< endl;
+        // if (t%10==0)
+        // {
+        //     for (int i=0;i<SU.size();i++)
+        //     {
+        //         cout<<"SU"<<i<<"TxRate: "<<SU[i].counterTxRate<<" ";
+        //     }
+        // }
 
 
         TotalPacketsCounter(t,SU,TotalPackets.AvgPerTimeSlot);
         CollisionCounter(t,Collisions.AvgPerTimeSlot,FreqArray);
+        ThroughPutCalculator(t,FreqArray,Throughput.AvgPerTimeSlot,Throughput.AvgPerBand);
+        UtilizationCalculator(t,FreqArray,Utilization.AvgPerTimeSlot,Utilization.AvgPerBand);
 
 
     }
@@ -587,9 +619,11 @@ int main(){
 
 
 
-    printVector(Collisions.AvgPerTimeSlot,"Collision Count per timeslot Averaged Per Band");
-    printVector(TotalPackets.AvgPerTimeSlot,"Total Packets in whole queue");
-    printVector(WaitingTime.AvgPacketWaitingTime,"Average Packet Waiting time for each SU ");
+    // printVector(Collisions.AvgPerTimeSlot,"Collision Count per timeslot Averaged Per Band");
+    // printVector(TotalPackets.AvgPerTimeSlot,"Total Packets in whole queue");
+    // printVector(WaitingTime.AvgPacketWaitingTime,"Average Packet Waiting time for each SU ");
+    printVector(Utilization.AvgPerTimeSlot,"TimeSlot Average");
+    printVector(Utilization.AvgPerBand,"Band Average");
         // *********************************Writing Into Files*******************************************//
 
 
