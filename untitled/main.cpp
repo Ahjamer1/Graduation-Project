@@ -547,6 +547,7 @@ int main(){
                 if(randomCoinFlipper(SU[i].pktGenerationRate)){
                     SU[i].generatePkt(t);
                 }
+
                 if(SU[i].urgency == 2 && SU[i].dataRateClass == 1){ //Best effort
                     if(t%10 == 0 && t!=0){
                         cout<< "SU["<< i<< "]: collisionCounter: "<< collisionCounter<< endl;

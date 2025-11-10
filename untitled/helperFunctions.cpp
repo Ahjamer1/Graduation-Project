@@ -66,3 +66,5 @@ bool randomCoinFlipper(double probability){
     bernoulli_distribution flip {p}; //probability% chance to succeed
     return flip(randEngine); //if(flip(randEngine) === true return true else return false);
 }
+
+
