@@ -17,7 +17,7 @@ const int numberOfSU = 20;
 const double numberOfBands = 10;
 // vector <double> numofBands ={5,10,25};
 const int numberOfPU = numberOfBands;
-const double numberOfTimeSlots = 10;
+const double numberOfTimeSlots = 20;
 const double durationOfTimeSlot = 0.01;
 const int numberOfBandsPerSU = 1;
 vector <double> PuActiveProb={0.2,0.4,0.5,0.6};
@@ -32,7 +32,7 @@ vector <double> FalseAlarmAvgBandSecond(numberOfBands,0);
 vector <double> MissDetectionAvgBandSecond(numberOfBands,0);
 int historySizeForTransmissionVector = 10;
 int historySize = 5;
-int dataRateControlHistorySize = 10;
+int dataRateControlHistorySize = 5;
 
 
 
@@ -156,7 +156,7 @@ public:
     //**********************************************************
 
 
-
+    int collisionCounterEvery5TimeSlots =0;
     vector<vector <unsigned int>> history;
     deque <unsigned int> dataRateControlHistory;
     int lastTXState= 0;
@@ -191,9 +191,9 @@ public:
         }
         this->SensedBandsSUPerspective.push_back(bandsAsSeenBySU);
         this->SensedBandsSUPerspective.pop_front();
-        // for(int i=0; i< this->SensedBandsSUPerspective.size(); i++){
-        //     printVector(SensedBandsSUPerspective[i],"SensedBandsSUPerspective: ");
-        // }
+        for(int i=0; i< this->SensedBandsSUPerspective.size(); i++){
+            printVector(SensedBandsSUPerspective[i],"SensedBandsSUPerspective: ");
+        }
     }
     //**********************************************************
     //**********************************************************
@@ -383,10 +383,17 @@ vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser
                     occupiedBands[SU[i].selectedBand]+=1;
                 }else{
                     //choose to stay or relinquish
-                    if(SU[i].lastTXState ==1){
-                        continue;
-                    }else{
-                        SU[i].selectedBand = -1;
+                    // if(SU[i].lastTXState ==1){
+                    //     continue;
+                    // }else{
+                    //     SU[i].selectedBand = -1;
+                    // }
+                    if(t %5 ==0 && t !=0){
+                        if(SU[i].collisionCounterEvery5TimeSlots >=3){
+                             SU[i].selectedBand = -1;
+                        }else{
+                            continue;
+                        }
                     }
                 }
 
@@ -420,15 +427,17 @@ vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser
         string s = "BandsAsSeenBySU[" + to_string(i) + "]: ";
         printVector(SU[i].bandsAsSeenBySU,s);
         if(SU[i].selectedBand !=-1){ //was given band
-            if(TXFreqArray[SU[i].selectedBand] != 1){ //NOT >1, because if SU selectedBand, then TXFreqArray[SU[i].selectedBand] >0 for sure.
+            if(TXFreqArray[SU[i].selectedBand] > 1){ // >1, and NOT (TXFreqArray[SU[i].selectedBand] !=1) because when SU acquired a band (alone) and doesn't have packets to transmit, TXFreqArray is equal to zero, and it counts a collision
                 // mark collision of SU on that band
                 // SU[i].history[TXFreqArray[SU[i].selectedBand]][]++;
                 SU[i].dataRateControlHistory.push_back(1);
                 SU[i].dataRateControlHistory.pop_front();
-                SU[i].lastTXState = 1;
-
+                // SU[i].lastTXState = 0;
 
             }else{
+                if(SU[i].pktqueue.size()> 0){
+
+
                 Packet poppedPacket = SU[i].pktqueue.front();
                 SU[i].pktqueue.pop();
                 poppedPacket.pktArrivalTime = t;
@@ -437,11 +446,11 @@ vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser
                 // cout<< "true"<< endl;
                 SU[i].dataRateControlHistory.push_back(0);
                 SU[i].dataRateControlHistory.pop_front();
-                SU[i].lastTXState = 1;
-
+                // SU[i].lastTXState = 1;
+                }
             }
             SU[i].counterTxRate= SU[i].chooseTxRate(SU[i].TxRates, "");
-            SU[i].selectedBand =-1;
+            // SU[i].selectedBand =-1;
         }else{
             SU[i].dataRateControlHistory.push_back(0);
             SU[i].dataRateControlHistory.pop_front();
@@ -493,13 +502,14 @@ int main(){
         }
         for(int i=0; i< SU.size(); i++){
             int collisionCounter = 0;
-            if(t%10 == 0 && t!=0){
+            if(t%5 == 0 && t!=0){
                 for(int k=0; k< dataRateControlHistorySize; k++){
                     if(SU[i].dataRateControlHistory[k] == 1){
                         collisionCounter++;
                     }
                 }
             }
+            SU[i].collisionCounterEvery5TimeSlots = collisionCounter;
             if(SU[i].pktGenerationRate ==-1){ //TYPE BULKY uninterruptible
                 // if(good quality){
                 // if(t % SU[i].counter == 0){
@@ -554,7 +564,7 @@ int main(){
 
 
         // for(int i=0; i< SU.size(); i++){
-        vector <unsigned int> TXFreqArray=allocationFunction(PU, SU,t);
+        vector <unsigned int> TXFreqArray= allocationFunction(PU, SU,t);
         // }
         // cout<<"selected band for su2: "<<SU[2].selectedBand<<endl;
         // printVector(SU[2].dataRateControlHistory, "SU2 ControlHistory: ");
