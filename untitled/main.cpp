@@ -455,9 +455,9 @@ vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser
             SU[i].dataRateControlHistory.pop_front();
 
         }
-        if(i ==3){
-            cout<< "SU[3].queueSIZE: "<< SU[i].pktqueue.size()<< endl;
-        }
+        // if(i ==3){
+        //     cout<< "SU[3].queueSIZE: "<< SU[i].pktqueue.size()<< endl;
+        // }
     }
 
 
@@ -481,18 +481,8 @@ void fillHistoryOfTransmissionState(vector <Band> &PU, vector<unsigned int> &fre
     }
 }
 
-void decisionMaker(int t){
-
+void generatePKTS(vector <SecondaryUser> &SU, int t){
     for(int i=0; i< SU.size(); i++){
-        int collisionCounter = 0;
-        if(t%5 == 0 && t!=0){
-            for(int k=0; k< dataRateControlHistorySize; k++){
-                if(SU[i].dataRateControlHistory[k] == 1){
-                    collisionCounter++;
-                }
-            }
-        }
-        SU[i].collisionCounterEvery5TimeSlots = collisionCounter;
         if(SU[i].pktGenerationRate ==-1){ //TYPE BULKY uninterruptible CAMERA
             // if(good quality){
             // if(t % SU[i].counter == 0){
@@ -502,9 +492,58 @@ void decisionMaker(int t){
             // if(quality changed){
             // SU[i].counter= SU[i].choosePktPeriod(SU[i].periodsForBulky);
             // }
+
+            if(SU[i].counterPeriod > 0){
+                SU[i].counterPeriod--;
+            }else if(SU[i].counterPeriod== 0){
+                SU[i].generatePkt(t);
+                SU[i].counterPeriod= SU[i].choosePktPeriod(SU[i].periodsForBulky, "");
+            }
+        }else{ // Urgent and Best Effort
+            if(randomCoinFlipper(SU[i].pktGenerationRate)){
+                SU[i].generatePkt(t);
+            }
+        }
+    }
+}
+
+void collisionCounter(vector <SecondaryUser> &SU, int t){
+    for(int i=0; i< SU.size(); i++){
+        int collisionCounter = 0;
+        if(t%10 == 0){
+            for(int k=0; k< dataRateControlHistorySize; k++){
+                if(SU[i].dataRateControlHistory[k] == 1){
+                    collisionCounter++;
+                }
+            }
+        }
+        SU[i].collisionCounterEvery5TimeSlots = collisionCounter;
+    }
+}
+
+void TakeDecisionStayOrRelinquish(vector <SecondaryUser> &SU, int t){
+    for(int i=0; i< SU.size(); i++){
+        if(t %10 ==0 && t !=0){
+            if(SU[i].collisionCounterEvery5TimeSlots >=3){
+                SU[i].selectedBand = -1;
+            }else{
+                continue;
+            }
+        }
+    }
+}
+
+
+void TakeDecisionDataRate(vector <SecondaryUser> &SU, int t){
+    for(int i=0; i< SU.size(); i++){
+        if(t%10==0 && t!=0){
+            cout<< "SU["<< i<< "]: collisionCounterEvery5TimeSlots: "<< SU[i].collisionCounterEvery5TimeSlots<< endl;
+        }
+        if(SU[i].pktGenerationRate ==-1){ //TYPE BULKY uninterruptible
+
             if(t%10 == 0 && t!=0){
-                cout<< "SU["<< i<< "]: collisionCounter: "<< collisionCounter<< endl;
-                if(collisionCounter >= dataRateControlHistorySize/2){
+                // cout<< "SU["<< i<< "]: collisionCounterEvery5TimeSlots: "<< SU[i].collisionCounterEvery5TimeSlots<< endl;
+                if(SU[i].collisionCounterEvery5TimeSlots >= dataRateControlHistorySize/2){
                     // choose slower TX number
                     SU[i].chooseTxRate(SU[i].TxRates, "decreaseTxRate");
                     SU[i].choosePktPeriod(SU[i].periodsForBulky, "decreaseQuality");
@@ -517,22 +556,13 @@ void decisionMaker(int t){
                 }
 
             }
-            if(SU[i].counterPeriod > 0){
-                SU[i].counterPeriod--;
-            }else if(SU[i].counterPeriod== 0){
-                SU[i].generatePkt(t);
-                SU[i].counterPeriod= SU[i].choosePktPeriod(SU[i].periodsForBulky, "");
-            }
-            // }
         }else{ // URGENT and BULKY interruptible SU's
-            if(randomCoinFlipper(SU[i].pktGenerationRate)){
-                SU[i].generatePkt(t);
-            }
+
 
             if(SU[i].urgency == 2 && SU[i].dataRateClass == 1){ //Best effort
                 if(t%10 == 0 && t!=0){
-                    cout<< "SU["<< i<< "]: collisionCounter: "<< collisionCounter<< endl;
-                    if(collisionCounter >= dataRateControlHistorySize/2){
+                    // cout<< "SU["<< i<< "]: collisionCounterEvery5TimeSlots: "<< SU[i].collisionCounterEvery5TimeSlots<< endl;
+                    if(SU[i].collisionCounterEvery5TimeSlots >= dataRateControlHistorySize/2){
                         // choose slower TX number
                         SU[i].chooseTxRate(SU[i].TxRates, "decreaseTxRate");
                     }else{
@@ -544,6 +574,7 @@ void decisionMaker(int t){
         }
     }
 }
+
 
 int main(){
     Parameters Collisions;
@@ -561,95 +592,33 @@ int main(){
         for (int i=0;i<PU.size();i++){
             PU[i].PUState=0;
         }
-        // Generate PKTS
-        for(int i=0; i< SU.size(); i++){
-            if(SU[i].pktGenerationRate ==-1){ //TYPE BULKY uninterruptible CAMERA
-                // if(good quality){
-                // if(t % SU[i].counter == 0){
-                //     SU[i].generatePkt(t);
-                // }
 
-                // if(quality changed){
-                // SU[i].counter= SU[i].choosePktPeriod(SU[i].periodsForBulky);
-                // }
+        //**********************************************************
+        //******************** Generate Packets ********************
+        //**********************************************************
+        generatePKTS(SU, t);
 
-                if(SU[i].counterPeriod > 0){
-                    SU[i].counterPeriod--;
-                }else if(SU[i].counterPeriod== 0){
-                    SU[i].generatePkt(t);
-                    SU[i].counterPeriod= SU[i].choosePktPeriod(SU[i].periodsForBulky, "");
-                }
-            }else{ // Urgent and Best Effort
-                if(randomCoinFlipper(SU[i].pktGenerationRate)){
-                    SU[i].generatePkt(t);
-                }
-            }
-        }
 
-        // Allocation function
+        //**********************************************************
+        //***************** Allocation Function ********************
+        //**********************************************************
         vector <unsigned int> TXFreqArray= allocationFunction(PU, SU,t);
-        // Calculate CollisionCounter
-        for(int i=0; i< SU.size(); i++){
-            int collisionCounter = 0;
-            if(t%10 == 0){
-                for(int k=0; k< dataRateControlHistorySize; k++){
-                    if(SU[i].dataRateControlHistory[k] == 1){
-                        collisionCounter++;
-                    }
-                }
-            }
-            SU[i].collisionCounterEvery5TimeSlots = collisionCounter;
-        }
-        // Take Decision Stay or Relinquish
-        for(int i=0; i< SU.size(); i++){
-            if(t %10 ==0 && t !=0){
-                if(SU[i].collisionCounterEvery5TimeSlots >=3){
-                    SU[i].selectedBand = -1;
-                }else{
-                    continue;
-                }
-            }
-        }
-
-        // Take Decision to increase/ Decrease DataRate
-        for(int i=0; i< SU.size(); i++){
-            if(t%10==0 && t!=0){
-                cout<< "SU["<< i<< "]: collisionCounterEvery5TimeSlots: "<< SU[i].collisionCounterEvery5TimeSlots<< endl;
-            }
-            if(SU[i].pktGenerationRate ==-1){ //TYPE BULKY uninterruptible
-
-                if(t%10 == 0 && t!=0){
-                    // cout<< "SU["<< i<< "]: collisionCounterEvery5TimeSlots: "<< SU[i].collisionCounterEvery5TimeSlots<< endl;
-                    if(SU[i].collisionCounterEvery5TimeSlots >= dataRateControlHistorySize/2){
-                        // choose slower TX number
-                        SU[i].chooseTxRate(SU[i].TxRates, "decreaseTxRate");
-                        SU[i].choosePktPeriod(SU[i].periodsForBulky, "decreaseQuality");
-
-                    }else{
-                        // choose higher TX number
-                        SU[i].chooseTxRate(SU[i].TxRates, "increaseTxRate");
-                        SU[i].choosePktPeriod(SU[i].periodsForBulky, "increaseQuality");
-
-                    }
-
-                }
-            }else{ // URGENT and BULKY interruptible SU's
 
 
-                if(SU[i].urgency == 2 && SU[i].dataRateClass == 1){ //Best effort
-                    if(t%10 == 0 && t!=0){
-                        // cout<< "SU["<< i<< "]: collisionCounterEvery5TimeSlots: "<< SU[i].collisionCounterEvery5TimeSlots<< endl;
-                        if(SU[i].collisionCounterEvery5TimeSlots >= dataRateControlHistorySize/2){
-                            // choose slower TX number
-                            SU[i].chooseTxRate(SU[i].TxRates, "decreaseTxRate");
-                        }else{
-                            // choose higher TX number
-                            SU[i].chooseTxRate(SU[i].TxRates, "increaseTxRate");
-                        }
-                    }
-                }
-            }
-        }
+        //**********************************************************
+        //*************** Calculate CollisionCounter ***************
+        //**********************************************************
+        collisionCounter(SU, t);
+
+        //**********************************************************
+        //************ Take Decision Stay or Relinquish ************
+        //**********************************************************
+        TakeDecisionStayOrRelinquish(SU,t);
+
+        //**********************************************************
+        //****** Take Decision to increase/Decrease DataRate *******
+        //**********************************************************
+        TakeDecisionDataRate(SU,t);
 
 
         // for(int i=0; i< SU.size(); i++){
