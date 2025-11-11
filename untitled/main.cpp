@@ -17,7 +17,7 @@ const int numberOfSU = 20;
 const double numberOfBands = 10;
 // vector <double> numofBands ={5,10,25};
 const int numberOfPU = numberOfBands;
-const double numberOfTimeSlots = 20;
+const double numberOfTimeSlots = 31;
 const double durationOfTimeSlot = 0.01;
 const int numberOfBandsPerSU = 1;
 vector <double> PuActiveProb={0.2,0.4,0.5,0.6};
@@ -32,7 +32,7 @@ vector <double> FalseAlarmAvgBandSecond(numberOfBands,0);
 vector <double> MissDetectionAvgBandSecond(numberOfBands,0);
 int historySizeForTransmissionVector = 10;
 int historySize = 5;
-int dataRateControlHistorySize = 5;
+int dataRateControlHistorySize = 10;
 
 
 
@@ -191,9 +191,9 @@ public:
         }
         this->SensedBandsSUPerspective.push_back(bandsAsSeenBySU);
         this->SensedBandsSUPerspective.pop_front();
-        for(int i=0; i< this->SensedBandsSUPerspective.size(); i++){
-            printVector(SensedBandsSUPerspective[i],"SensedBandsSUPerspective: ");
-        }
+        // for(int i=0; i< this->SensedBandsSUPerspective.size(); i++){
+        //     printVector(SensedBandsSUPerspective[i],"SensedBandsSUPerspective: ");
+        // }
     }
     //**********************************************************
     //**********************************************************
@@ -377,25 +377,24 @@ vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser
                 // SU[i].selectedBand will not be random, it must be based upon the history parameters
                 // SU[i] will not get assigned a band every time slot, however, it will choose to stay or relinquish
                 if(SU[i].selectedBand==-1){ // this if statement is satisfied, when SU wasn't assigned a band yet, or when SU relinquished a band it chose before
+                    if(i==1){
+                        cout<< "TIME SLOTTTTTT: "<< t<< " "<< endl;
+                    }
                     SU[i].selectedBand =selectRandomValues(possibleBands,1)[0]; // to be changed with history
                     cout<< "SU["<< i<< "]: selectedBand:"<< SU[i].selectedBand<< endl;
 
                     occupiedBands[SU[i].selectedBand]+=1;
-                }else{
-                    //choose to stay or relinquish
-                    // if(SU[i].lastTXState ==1){
-                    //     continue;
-                    // }else{
-                    //     SU[i].selectedBand = -1;
-                    // }
-                    if(t %5 ==0 && t !=0){
-                        if(SU[i].collisionCounterEvery5TimeSlots >=3){
-                             SU[i].selectedBand = -1;
-                        }else{
-                            continue;
-                        }
-                    }
                 }
+                // else{
+                //     continue;
+                //     //choose to stay or relinquish
+                //     // if(SU[i].lastTXState ==1){
+                //     //     continue;
+                //     // }else{
+                //     //     SU[i].selectedBand = -1;
+                //     // }
+
+                // }
 
             }
             if(SU[i].counterTxRate > 0){
@@ -424,8 +423,8 @@ vector <unsigned int> allocationFunction(vector <Band> &PU, vector<SecondaryUser
 
     for(int i=0; i< SU.size(); i++){
         SU[i].fillbandsAsSeenBySU(TXFreqArray, t);
-        string s = "BandsAsSeenBySU[" + to_string(i) + "]: ";
-        printVector(SU[i].bandsAsSeenBySU,s);
+        // string s = "BandsAsSeenBySU[" + to_string(i) + "]: ";
+        // printVector(SU[i].bandsAsSeenBySU,s);
         if(SU[i].selectedBand !=-1){ //was given band
             if(TXFreqArray[SU[i].selectedBand] > 1){ // >1, and NOT (TXFreqArray[SU[i].selectedBand] !=1) because when SU acquired a band (alone) and doesn't have packets to transmit, TXFreqArray is equal to zero, and it counts a collision
                 // mark collision of SU on that band
@@ -482,7 +481,69 @@ void fillHistoryOfTransmissionState(vector <Band> &PU, vector<unsigned int> &fre
     }
 }
 
+void decisionMaker(int t){
 
+    for(int i=0; i< SU.size(); i++){
+        int collisionCounter = 0;
+        if(t%5 == 0 && t!=0){
+            for(int k=0; k< dataRateControlHistorySize; k++){
+                if(SU[i].dataRateControlHistory[k] == 1){
+                    collisionCounter++;
+                }
+            }
+        }
+        SU[i].collisionCounterEvery5TimeSlots = collisionCounter;
+        if(SU[i].pktGenerationRate ==-1){ //TYPE BULKY uninterruptible CAMERA
+            // if(good quality){
+            // if(t % SU[i].counter == 0){
+            //     SU[i].generatePkt(t);
+            // }
+
+            // if(quality changed){
+            // SU[i].counter= SU[i].choosePktPeriod(SU[i].periodsForBulky);
+            // }
+            if(t%10 == 0 && t!=0){
+                cout<< "SU["<< i<< "]: collisionCounter: "<< collisionCounter<< endl;
+                if(collisionCounter >= dataRateControlHistorySize/2){
+                    // choose slower TX number
+                    SU[i].chooseTxRate(SU[i].TxRates, "decreaseTxRate");
+                    SU[i].choosePktPeriod(SU[i].periodsForBulky, "decreaseQuality");
+
+                }else{
+                    // choose higher TX number
+                    SU[i].chooseTxRate(SU[i].TxRates, "increaseTxRate");
+                    SU[i].choosePktPeriod(SU[i].periodsForBulky, "increaseQuality");
+
+                }
+
+            }
+            if(SU[i].counterPeriod > 0){
+                SU[i].counterPeriod--;
+            }else if(SU[i].counterPeriod== 0){
+                SU[i].generatePkt(t);
+                SU[i].counterPeriod= SU[i].choosePktPeriod(SU[i].periodsForBulky, "");
+            }
+            // }
+        }else{ // URGENT and BULKY interruptible SU's
+            if(randomCoinFlipper(SU[i].pktGenerationRate)){
+                SU[i].generatePkt(t);
+            }
+
+            if(SU[i].urgency == 2 && SU[i].dataRateClass == 1){ //Best effort
+                if(t%10 == 0 && t!=0){
+                    cout<< "SU["<< i<< "]: collisionCounter: "<< collisionCounter<< endl;
+                    if(collisionCounter >= dataRateControlHistorySize/2){
+                        // choose slower TX number
+                        SU[i].chooseTxRate(SU[i].TxRates, "decreaseTxRate");
+                    }else{
+                        // choose higher TX number
+                        SU[i].chooseTxRate(SU[i].TxRates, "increaseTxRate");
+                    }
+                }
+            }
+        }
+    }
+}
 
 int main(){
     Parameters Collisions;
@@ -500,17 +561,9 @@ int main(){
         for (int i=0;i<PU.size();i++){
             PU[i].PUState=0;
         }
+        // Generate PKTS
         for(int i=0; i< SU.size(); i++){
-            int collisionCounter = 0;
-            if(t%5 == 0 && t!=0){
-                for(int k=0; k< dataRateControlHistorySize; k++){
-                    if(SU[i].dataRateControlHistory[k] == 1){
-                        collisionCounter++;
-                    }
-                }
-            }
-            SU[i].collisionCounterEvery5TimeSlots = collisionCounter;
-            if(SU[i].pktGenerationRate ==-1){ //TYPE BULKY uninterruptible
+            if(SU[i].pktGenerationRate ==-1){ //TYPE BULKY uninterruptible CAMERA
                 // if(good quality){
                 // if(t % SU[i].counter == 0){
                 //     SU[i].generatePkt(t);
@@ -520,10 +573,54 @@ int main(){
                 // SU[i].counter= SU[i].choosePktPeriod(SU[i].periodsForBulky);
                 // }
 
-                if(t%10 == 0 && t!=0){
+                if(SU[i].counterPeriod > 0){
+                    SU[i].counterPeriod--;
+                }else if(SU[i].counterPeriod== 0){
+                    SU[i].generatePkt(t);
+                    SU[i].counterPeriod= SU[i].choosePktPeriod(SU[i].periodsForBulky, "");
+                }
+            }else{ // Urgent and Best Effort
+                if(randomCoinFlipper(SU[i].pktGenerationRate)){
+                    SU[i].generatePkt(t);
+                }
+            }
+        }
 
-                    cout<< "SU["<< i<< "]: collisionCounter: "<< collisionCounter<< endl;
-                    if(collisionCounter >= dataRateControlHistorySize/2){
+        // Allocation function
+        vector <unsigned int> TXFreqArray= allocationFunction(PU, SU,t);
+        // Calculate CollisionCounter
+        for(int i=0; i< SU.size(); i++){
+            int collisionCounter = 0;
+            if(t%10 == 0){
+                for(int k=0; k< dataRateControlHistorySize; k++){
+                    if(SU[i].dataRateControlHistory[k] == 1){
+                        collisionCounter++;
+                    }
+                }
+            }
+            SU[i].collisionCounterEvery5TimeSlots = collisionCounter;
+        }
+        // Take Decision Stay or Relinquish
+        for(int i=0; i< SU.size(); i++){
+            if(t %10 ==0 && t !=0){
+                if(SU[i].collisionCounterEvery5TimeSlots >=3){
+                    SU[i].selectedBand = -1;
+                }else{
+                    continue;
+                }
+            }
+        }
+
+        // Take Decision to increase/ Decrease DataRate
+        for(int i=0; i< SU.size(); i++){
+            if(t%10==0 && t!=0){
+                cout<< "SU["<< i<< "]: collisionCounterEvery5TimeSlots: "<< SU[i].collisionCounterEvery5TimeSlots<< endl;
+            }
+            if(SU[i].pktGenerationRate ==-1){ //TYPE BULKY uninterruptible
+
+                if(t%10 == 0 && t!=0){
+                    // cout<< "SU["<< i<< "]: collisionCounterEvery5TimeSlots: "<< SU[i].collisionCounterEvery5TimeSlots<< endl;
+                    if(SU[i].collisionCounterEvery5TimeSlots >= dataRateControlHistorySize/2){
                         // choose slower TX number
                         SU[i].chooseTxRate(SU[i].TxRates, "decreaseTxRate");
                         SU[i].choosePktPeriod(SU[i].periodsForBulky, "decreaseQuality");
@@ -536,22 +633,13 @@ int main(){
                     }
 
                 }
-                if(SU[i].counterPeriod > 0){
-                    SU[i].counterPeriod--;
-                }else if(SU[i].counterPeriod== 0){
-                    SU[i].generatePkt(t);
-                    SU[i].counterPeriod= SU[i].choosePktPeriod(SU[i].periodsForBulky, "");
-                }
-                // }
             }else{ // URGENT and BULKY interruptible SU's
-                if(randomCoinFlipper(SU[i].pktGenerationRate)){
-                    SU[i].generatePkt(t);
-                }
+
 
                 if(SU[i].urgency == 2 && SU[i].dataRateClass == 1){ //Best effort
                     if(t%10 == 0 && t!=0){
-                        cout<< "SU["<< i<< "]: collisionCounter: "<< collisionCounter<< endl;
-                        if(collisionCounter >= dataRateControlHistorySize/2){
+                        // cout<< "SU["<< i<< "]: collisionCounterEvery5TimeSlots: "<< SU[i].collisionCounterEvery5TimeSlots<< endl;
+                        if(SU[i].collisionCounterEvery5TimeSlots >= dataRateControlHistorySize/2){
                             // choose slower TX number
                             SU[i].chooseTxRate(SU[i].TxRates, "decreaseTxRate");
                         }else{
@@ -565,7 +653,7 @@ int main(){
 
 
         // for(int i=0; i< SU.size(); i++){
-        vector <unsigned int> TXFreqArray= allocationFunction(PU, SU,t);
+       // decisionMaker(t);
         // }
         // cout<<"selected band for su2: "<<SU[2].selectedBand<<endl;
         // printVector(SU[2].dataRateControlHistory, "SU2 ControlHistory: ");
